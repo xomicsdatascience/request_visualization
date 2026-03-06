@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Background circle -->
+  <circle cx="32" cy="32" r="30" fill="#2196F3"/>
+
+  <!-- Clipboard body -->
+  <rect x="16" y="14" width="32" height="40" rx="3" fill="white"/>
+
+  <!-- Clipboard clip -->
+  <rect x="24" y="10" width="16" height="8" rx="2" fill="#1976D2"/>
+  <rect x="27" y="12" width="10" height="4" rx="1" fill="white"/>
+
+  <!-- Checklist lines -->
+  <!-- Item 1 - checked -->
+  <rect x="21" y="24" width="4" height="4" rx="1" fill="#4CAF50"/>
+  <path d="M22 26 L23 27 L25 24.5" stroke="white" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="28" y="25" width="16" height="2" rx="1" fill="#90CAF9"/>
+
+  <!-- Item 2 - checked -->
+  <rect x="21" y="32" width="4" height="4" rx="1" fill="#4CAF50"/>
+  <path d="M22 34 L23 35 L25 32.5" stroke="white" stroke-width="1.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="28" y="33" width="12" height="2" rx="1" fill="#90CAF9"/>
+
+  <!-- Item 3 - pending -->
+  <rect x="21" y="40" width="4" height="4" rx="1" fill="#FFC107"/>
+  <rect x="28" y="41" width="14" height="2" rx="1" fill="#90CAF9"/>
+</svg>

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "request-visualization"
+version = "0.1.0"
+description = "Desktop GUI for visualizing and managing agent requests"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyQt6>=6.4.0",
+    "httpx>=0.24.0",
+]
+
+[project.scripts]
+request-viz = "request_visualization.main:main"
+request-viz-migrate = "request_visualization.migrate_db:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"request_visualization.resources" = ["*.svg", "*.png", "*.ico"]

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Agent Request Visualization
+Comment=Desktop GUI for visualizing and managing agent requests
+Exec=request-viz
+Icon=request-viz
+Terminal=false
+Categories=Utility;Development;
+Keywords=agent;request;visualization;mcp;
+StartupWMClass=request-viz
