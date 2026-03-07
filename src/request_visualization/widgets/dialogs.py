@@ -226,7 +226,7 @@ class NewRequestDialog(QDialog):
     """
 
     # Default base directory for discovering projects
-    DEFAULT_BASE_DIR = Path("/home/lex/projects/mcp")
+    DEFAULT_BASE_DIR = Path("./")
 
     # Special option for creating a new project
     NEW_PROJECT_OPTION = "New Project"
