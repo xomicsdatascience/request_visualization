@@ -16,11 +16,25 @@ DEFAULT_ENDPOINT_FILE = Path.home() / ".claude" / "azure.endpoint"
 DEFAULT_API_KEY_FILE = Path.home() / ".claude" / "azure.key"
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small"
 
-# Valid request statuses
-VALID_STATUSES = ("pending", "approved", "rejected", "implemented", "completed", "cancelled")
+# Valid request statuses (aligned with the canonical schema in
+# odda_utils/src/odda_utils/static/schema.sql).
+VALID_STATUSES = (
+    "pending",
+    "approved",
+    "rejected",
+    "in_progress",
+    "implemented",
+    "incomplete",
+    "completed",
+    "cancelled",
+)
 
-# Inactive statuses (requests that don't need attention)
-INACTIVE_STATUSES = ("completed", "rejected", "cancelled")
+# Inactive statuses (requests that no longer need attention). These are the
+# terminal states: an accepted implementation (completed), a rejected request,
+# a cancelled request, or an implementation that could not be finished
+# (incomplete). Active requests are everything else: pending, approved,
+# in_progress, and implemented.
+INACTIVE_STATUSES = ("completed", "rejected", "cancelled", "incomplete")
 
 
 def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
@@ -44,11 +58,16 @@ def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
 def ensure_table_exists(db_path: Path = DEFAULT_DB_PATH) -> None:
     """Create the agent_requests table if it doesn't exist.
 
-    The table supports the following statuses:
+    The schema matches the canonical definition in
+    ``odda_utils/src/odda_utils/static/schema.sql`` and supports the following
+    statuses:
+
     - pending: Initial state, awaiting review
     - approved: Approved for implementation
     - rejected: Rejected with a reason
+    - in_progress: Implementation is underway
     - implemented: Implementation completed, awaiting verification
+    - incomplete: Implementation attempted but could not be finished
     - completed: Implementation verified and accepted
     - cancelled: Cancelled after implementation
 
@@ -67,8 +86,9 @@ def ensure_table_exists(db_path: Path = DEFAULT_DB_PATH) -> None:
                 request TEXT NOT NULL,
                 reason_for_request TEXT,
                 request_status TEXT DEFAULT 'pending'
-                    CHECK (request_status IN ('pending', 'approved', 'rejected', 'implemented', 'completed', 'cancelled')),
+                    CHECK (request_status IN ('pending', 'approved', 'rejected', 'in_progress', 'implemented', 'incomplete', 'completed', 'cancelled')),
                 status_reason TEXT,
+                assigned_time TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 embedding BLOB,
                 embedding_model VARCHAR(100)
@@ -85,6 +105,10 @@ def ensure_table_exists(db_path: Path = DEFAULT_DB_PATH) -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_agent_requests_agent "
             "ON agent_requests(agent_name)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_agent_requests_assigned "
+            "ON agent_requests(assigned_time)"
         )
         conn.commit()
     finally:
@@ -170,7 +194,7 @@ def get_all_requests(
         Path to the SQLite database file.
     status_filter : str | None
         Optional status to filter by ('pending', 'approved', 'rejected',
-        'implemented', 'completed', 'cancelled').
+        'in_progress', 'implemented', 'incomplete', 'completed', 'cancelled').
 
     Returns
     -------
@@ -510,6 +534,9 @@ def _embedding_to_blob(embedding: list[float]) -> bytes:
     return struct.pack(f"{len(embedding)}f", *embedding)
 
 
+# TODO: Consolidate this credential reader and get_text_embedding with the
+# shared model layer being built in odda_utils; kept local for now so the GUI
+# continues to work standalone.
 def _get_azure_credentials(
     endpoint_file: Path | None = None,
     api_key_file: Path | None = None,
@@ -577,8 +604,31 @@ def get_text_embedding(
     Raises
     ------
     httpx.HTTPError
-        If the API request fails.
+        If the API request fails (standalone fallback path only).
+
+    Notes
+    -----
+    When the ``odda_utils`` package is importable (the normal deployment), this
+    delegates to the shared bring-your-own-key model layer so the GUI honours the
+    same provider configuration as the rest of ODDA. If ``odda_utils`` is not
+    available, it falls back to a self-contained Azure OpenAI request so the GUI
+    still works standalone.
     """
+    try:
+        from odda_utils.utils import get_text_embedding as _shared_embedding
+    except ImportError:
+        _shared_embedding = None
+
+    if _shared_embedding is not None:
+        return _shared_embedding(
+            text,
+            endpoint_file=endpoint_file,
+            api_key_file=api_key_file,
+            deployment_name=deployment_name,
+            api_version=api_version,
+        )
+
+    # Standalone fallback: direct Azure OpenAI embeddings request.
     endpoint, api_key = _get_azure_credentials(endpoint_file, api_key_file)
 
     url = f"{endpoint}/openai/deployments/{deployment_name}/embeddings"
@@ -662,7 +712,7 @@ def set_request_status(
         ID of the request to update.
     status : str
         New status value. Must be one of: 'pending', 'approved', 'rejected',
-        'implemented', 'completed', 'cancelled'.
+        'in_progress', 'implemented', 'incomplete', 'completed', 'cancelled'.
     reason : str | None
         Optional reason for the status change.
     db_path : Path

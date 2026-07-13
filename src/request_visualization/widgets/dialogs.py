@@ -1,7 +1,10 @@
 # Dialog widgets for the request visualization GUI.
 # Provides modal dialogs for approving, rejecting, revising, and creating requests.
 # The NewRequestDialog supports selecting existing projects or creating new ones.
+# The base directory used to discover projects is configurable via the
+# ODDA_PROJECTS_DIR environment variable, with a cross-platform fallback.
 
+import os
 from pathlib import Path
 
 from PyQt6.QtWidgets import (
@@ -225,8 +228,9 @@ class NewRequestDialog(QDialog):
     by selecting "New Project" and entering a project name.
     """
 
-    # Default base directory for discovering projects
-    DEFAULT_BASE_DIR = Path("./")
+    # Environment variable used to configure the base directory for project
+    # discovery. Kept as a class attribute so it can be overridden/inspected.
+    PROJECTS_DIR_ENV_VAR = "ODDA_PROJECTS_DIR"
 
     # Special option for creating a new project
     NEW_PROJECT_OPTION = "New Project"
@@ -239,15 +243,18 @@ class NewRequestDialog(QDialog):
         parent : QWidget, optional
             Parent widget.
         base_dir : Path | str | None, optional
-            Base directory to search for project directories.
-            Defaults to /home/lex/projects/mcp.
+            Base directory to search for project directories. When not
+            provided, the directory named by the ``ODDA_PROJECTS_DIR``
+            environment variable is used (``~`` is expanded); if that variable
+            is unset, the current working directory is used as a
+            cross-platform fallback.
         """
         super().__init__(parent)
         self.setWindowTitle("New Request")
         self.setMinimumWidth(500)
         self.setMinimumHeight(400)
 
-        self._base_dir = Path(base_dir) if base_dir else self.DEFAULT_BASE_DIR
+        self._base_dir = self._resolve_base_dir(base_dir)
 
         layout = QVBoxLayout(self)
 
@@ -299,6 +306,38 @@ class NewRequestDialog(QDialog):
         self.button_box.accepted.connect(self._validate_and_accept)
         self.button_box.rejected.connect(self.reject)
         layout.addWidget(self.button_box)
+
+    @classmethod
+    def _resolve_base_dir(cls, base_dir: Path | str | None) -> Path:
+        """Resolve the base directory used to discover projects.
+
+        Resolution order:
+
+        1. An explicit ``base_dir`` argument, if provided.
+        2. The path named by the ``ODDA_PROJECTS_DIR`` environment variable
+           (with ``~`` expanded), if set and non-empty.
+        3. The current working directory, as a cross-platform fallback.
+
+        Parameters
+        ----------
+        base_dir : Path | str | None
+            Explicit base directory override, or None to use the environment
+            variable / fallback.
+
+        Returns
+        -------
+        Path
+            The resolved base directory. It is not guaranteed to exist; callers
+            handle a missing directory gracefully.
+        """
+        if base_dir:
+            return Path(base_dir).expanduser()
+
+        env_value = os.environ.get(cls.PROJECTS_DIR_ENV_VAR)
+        if env_value:
+            return Path(env_value).expanduser()
+
+        return Path.cwd()
 
     def _populate_projects(self) -> None:
         """Populate the project dropdown with directories from the base directory.
